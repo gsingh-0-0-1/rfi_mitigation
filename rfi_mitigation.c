@@ -10,7 +10,7 @@
 #define ELEM_SWAP(a,b) { register float t=(a);(a)=(b);(b)=t; }
 #define SWAP(a,b) temp=(a);(a)=(b);(b)=temp;
 
-int compare(const void * a, const void * b){
+static int float_compare(const void * a, const void * b){
     return (int) ( *(float *)a - *(float*)b );;
 }
 
@@ -72,7 +72,7 @@ float quick_select_median(float arr[], uint16_t n){
     return median;
 }*/
 
-double norm(double mean, double std_dev)
+static inline double norm(double mean, double std_dev)
 {
   double   u, r, theta;           // Variables for Box-Muller method
   double   x;                     // Normal(0, 1) rv
@@ -104,6 +104,8 @@ double norm(double mean, double std_dev)
 void correct_drops(float* block, int64_t nchans, int64_t nsamps, double thresh, char* mask){
     //block shape is (nchans, nsamps)
     
+    size_t ichan,isamp;
+
     //ts is the sum of block across axis 0
     float ts[nsamps];
     //ensure that we set everything to start at 0, since we're iteratively adding to the value
@@ -111,9 +113,9 @@ void correct_drops(float* block, int64_t nchans, int64_t nsamps, double thresh, 
     memset(ts, 0, nsamps * sizeof(*ts));
     
     //axiswise sum of block array to get the timeseries
-    for (int i = 0; i < nsamps; i++){
-        for (int j = 0; j < nchans; j++){
-            ts[i] = ts[i] + *(block + (i*nchans) + j);
+    for (isamp = 0; isamp < nsamps; isamp++){
+        for (ichan = 0; ichan < nchans; ichan++){
+            ts[isamp] = ts[isamp] + *(block + (isamp*nchans) + ichan);
         }
     }
 
@@ -123,45 +125,31 @@ void correct_drops(float* block, int64_t nchans, int64_t nsamps, double thresh, 
     //the original ts for later
     float ts_sorted[nsamps];
     memcpy(ts_sorted, ts, nsamps * sizeof(*ts));
-    qsort(ts_sorted, nsamps, sizeof(*ts), compare);
+    qsort(ts_sorted, nsamps, sizeof(*ts), float_compare);
     
     //now get the median
-    float median;
-    median = quick_select_median(ts_sorted, nsamps);
+    float median = quick_select_median(ts_sorted, nsamps);
     fprintf(stderr, "Time-series median: %0.1f \n", median);
     
     //calculate mad
     //start by subtracting median and getting absolute value
-    float mad;
     float ts_processed[nsamps];
-    for (int i = 0; i < nsamps; i++){
-        float temp = ts[i] - median;
-        if (temp < 0){ temp = temp * -1; }
-        ts_processed[i] = temp;
-    }
+    for (isamp = 0; isamp < nsamps; isamp++)
+        ts_processed[isamp] = fabs(ts[isamp] - median);
     
     //now we have the processed array
     //now we actually calculate the mad
-    qsort(ts_processed, nsamps, sizeof(*ts_processed), compare);
-    mad = quick_select_median(ts_processed, nsamps);
+    qsort(ts_processed, nsamps, sizeof(*ts_processed), float_compare);
+    float mad = quick_select_median(ts_processed, nsamps);
     fprintf(stderr, "Time-series MAD: %0.1f \n", mad);
     
     //modify the ts using the mad and median
-    for (int i = 0; i < nsamps; i++){
-        ts[i] = ts[i] - median;
-        ts[i] = ts[i] / (1.4826 * mad);
-    }
+    for (isamp = 0; isamp < nsamps; isamp++)
+        ts[isamp] = (ts[isamp] - median) / (1.4826 * mad);
     
     //output the ts
     printf("Finished modifying time-series.\n");
     
-    
-    //start bandpass-related calculations
-    float bp[nchans];
-    //initialize to 0
-    for (int i = 0; i < nchans; i++){
-        bp[i] = 0;
-    }
     
     //axiswise median of block array to get the bandpass
     
@@ -173,45 +161,42 @@ void correct_drops(float* block, int64_t nchans, int64_t nsamps, double thresh, 
     
     //create the channel variable to calculate stats across each channel
     float channel[nsamps];
+
     
-    for (int i = 0; i < nchans; i++){
-        for (int j = 0; j < nsamps; j++){
-            channel[j] = *(block + i + (j * nchans));
-        }
+    for (ichan = 0; ichan < nchans; ichan++){
+        for (isamp = 0; isamp < nsamps; isamp++)
+            channel[isamp] = *(block + ichan + (isamp * nchans));
+
         //get the median of the channel
-        qsort(channel, nsamps, sizeof(*channel), compare);
-        float channel_median = quick_select_median(channel, nsamps);//getMedian(channel, nsamps);
-        bp_med[i] = channel_median;
+        qsort(channel, nsamps, sizeof(*channel), float_compare);
+        bp_med[ichan] = quick_select_median(channel, nsamps);//getMedian(channel, nsamps);
         
         //now we calculate the mad of the channel
-        for (int k = 0; k < nsamps; k++){
-            channel[k] = channel[k] - channel_median;
-            if (channel[k] < 0) { channel[k] = channel[k] * -1; }
-        }
-        qsort(channel, nsamps, sizeof(*channel), compare);
-        float channel_mad = quick_select_median(channel, nsamps);//getMedian(channel, nsamps);
-        bp_mad[i] = channel_mad;
+        for (isamp = 0; isamp < nsamps; isamp++)
+            channel[isamp] = fabs(channel[isamp] - bp_med[ichan]);
+
+        qsort(channel, nsamps, sizeof(*channel), float_compare);
+        bp_mad[ichan] = quick_select_median(channel, nsamps);//getMedian(channel, nsamps);
     }
 
     printf("Finished calculating bandpass med/mad.\n");
     
     //now we replace the points in the ts that are outside (-thresh, thresh)
     //iterate through the ts to find any indices where it is outside that interval
-    for (int i = 0; i < nsamps; i++){
+    for (isamp = 0; isamp < nsamps; isamp++){
         //check for points
-        if (ts[i] < -thresh){// || ts[i] > thresh){
+        if (ts[isamp] < -thresh){// || ts[i] > thresh){
             //set mask to 1 here
-            *(mask + i) = 1;
+            *(mask + isamp) = 1;
             //if the ts exceeds the threshold, start looping through the block at that index
             //set all the sample values at those channels
             //from a normal distribution with a mean at the bp_med of that sample
             //and a standard deviation of the bp_mad of that sample
-            for (int ch = 0; ch < nchans; ch++){
-                *(block + (i * nchans) + ch) = norm(bp_med[ch], 1.4826*bp_mad[ch]);
-            }
+            for (ichan = 0; ichan < nchans; ichan++)
+                *(block + (isamp * nchans) + ichan) = 
+                  norm(bp_med[ichan], 1.4826*bp_mad[ichan]);
         }
     }
-    
 }
 
 int main(){
