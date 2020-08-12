@@ -19,10 +19,10 @@ static int float_compare(const void * a, const void * b){
  * http://www.stat.cmu.edu/~ryantibs/median/
  *
  */
-float quick_select_median(float arr[], uint16_t n){
-    uint16_t low, high ;
-    uint16_t median;
-    uint16_t middle, ll, hh;
+float quick_select_median(float arr[], uint32_t n){
+    uint32_t low, high ;
+    uint32_t median;
+    uint32_t middle, ll, hh;
     low = 0 ; high = n-1 ; median = (low + high) / 2;
     for (;;) {
     if (high <= low) /* One element only */
@@ -111,7 +111,7 @@ static inline double norm(double mean, double std_dev)
   return(norm_rv);
 }
 
-void correct_drops(float* block, int64_t nchans, int64_t nsamps, double thresh, char* mask){
+void correct_drops(float* block, uint64_t nchans, uint64_t nsamps, double thresh, char* mask){
     //block shape is (nchans, nsamps)
     
     size_t ichan,isamp;
