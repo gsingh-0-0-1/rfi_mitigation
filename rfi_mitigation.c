@@ -14,6 +14,11 @@ static int float_compare(const void * a, const void * b){
     return (int) ( *(float *)a - *(float*)b );;
 }
 
+/*
+ * Algorithm:
+ * http://www.stat.cmu.edu/~ryantibs/median/
+ *
+ */
 float quick_select_median(float arr[], uint16_t n){
     uint16_t low, high ;
     uint16_t median;
@@ -72,6 +77,11 @@ float quick_select_median(float arr[], uint16_t n){
     return median;
 }*/
 
+/*
+ * Algorithm:
+ * https://www.csee.usf.edu/~kchriste/tools/gennorm.c
+ *
+ */
 static inline double norm(double mean, double std_dev)
 {
   double   u, r, theta;           // Variables for Box-Muller method
