@@ -241,22 +241,19 @@ int main(){
     mask = calloc(nsamps, sizeof *mask);
 
     ptr_in = fopen(in_file_name, "rb");
-    if (ptr_in == NULL)
-    {
+    if (ptr_in == NULL){
       fprintf(stderr, "Error: Input file not open...\n");
       return EXIT_FAILURE;
     }
     
     ptr_out = fopen(out_file_name, "wb");
-    if (ptr_out == NULL)
-    {
+    if (ptr_out == NULL){
       fprintf(stderr, "Error: output file not open...\n");
       return EXIT_FAILURE;
     }
     
     mask_ptr = fopen(mask_file_name, "wb");
-    if (mask_ptr == NULL)
-    {
+    if (mask_ptr == NULL){
       fprintf(stderr, "Error: mask file not open...\n");
       return EXIT_FAILURE;
     }
