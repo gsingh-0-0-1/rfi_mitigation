@@ -87,7 +87,7 @@ float quick_select_median(float arr[], uint32_t n) {
  * https://www.csee.usf.edu/~kchriste/tools/gennorm.c
  *
  */
-double norm(double mean, double std_dev) {
+static inline double norm(double mean, double std_dev) {
     double   u, r, theta;           // Variables for Box-Muller method
     double   x;                     // Normal(0, 1) rv
     double   norm_rv;               // The adjusted normal rv
