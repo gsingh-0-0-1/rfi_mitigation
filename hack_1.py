@@ -104,6 +104,7 @@ def main():
         offset += nsamps_to_correct
 
     # Write out corrected blocks.
+    io_start = time.time()
     try:
         with open(out_corr_path, "wb") as fd_corr:
             fd_corr.write(block)
@@ -120,11 +121,14 @@ def main():
         os_error(out_mask_path, 'write(mask)', ose)
     if TRACING:
         print("main:TRACING: mask array written")
+    io_stop = time.time()
 
     time_stop = time.time()
     et = time_stop - time_start
     print("main: END, Total blocks =", ibulk)
     print("main: END, Total elapsed time = {:.2f} seconds".format(et))
+    print("main: END, Write elapsed time out of Total = {:.2f} seconds"
+          .format(io_stop - io_start))
     print("main: END, Blocks/second = {:.2f}".format(ibulk / et))
     print("main: END, MB/second = {:.2f}".format((nbytes / et) / 1e6))
 
