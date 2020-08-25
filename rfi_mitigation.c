@@ -16,49 +16,37 @@
 
 //#define DETAILED_TRACING
 
-static int float_compare(const void * a, const void * b) {
-    return (int) ( *(float *)a - *(float*)b );;
-}
-
-
-static double timer_drops = 0.0;
-static double timer_median = 0.0;
-static double timer_norm = 0.0;
-
-
 /*
  * Algorithm:
  * http://www.stat.cmu.edu/~ryantibs/median/
  *
  */
-float quick_select_median(float arr[], uint32_t n) {
+static inline float quick_select_median(float arr[], uint32_t n) {
     uint32_t low, high ;
     uint32_t median;
     uint32_t middle, ll, hh;
-    clock_t clock_start = clock();
     low = 0 ; high = n-1 ; median = (low + high) / 2;
 
     for (;;) {
-        if (high <= low) /* One element only */ {
-            timer_median += (double) (clock() - clock_start) / CLOCKS_PER_SEC;
+        if (high <= low) /* One element only */
             return arr[median] ;
-        }
         if (high == low + 1) /* Two elements only */ {
             if (arr[low] > arr[high])
                 ELEM_SWAP(arr[low], arr[high]) ;
-            timer_median += (double) (clock() - clock_start) / CLOCKS_PER_SEC;
             return arr[median] ;
         }
         /* Find median of low, middle and high items; swap into position low */
         middle = (low + high) / 2;
         if (arr[middle] > arr[high])
-        ELEM_SWAP(arr[middle], arr[high]) ;
+            ELEM_SWAP(arr[middle], arr[high]) ;
         if (arr[low] > arr[high])
-        ELEM_SWAP(arr[low], arr[high]) ;
+            ELEM_SWAP(arr[low], arr[high]) ;
         if (arr[middle] > arr[low])
-        ELEM_SWAP(arr[middle], arr[low]) ;
+            ELEM_SWAP(arr[middle], arr[low]) ;
+
         /* Swap low item (now in position middle) into position (low+1) */
         ELEM_SWAP(arr[middle], arr[low+1]) ;
+
         /* Nibble from each end towards middle, swapping items when stuck */
         ll = low + 1;
         hh = high;
@@ -77,8 +65,7 @@ float quick_select_median(float arr[], uint32_t n) {
         if (hh >= median)
             high = hh - 1;
     }
-//    timer_median += (double) (clock() - clock_start) / CLOCKS_PER_SEC;
-//    return arr[median] ;
+    return arr[median] ;
 }
 
 
@@ -91,7 +78,6 @@ static inline double norm(double mean, double std_dev) {
     double   u, r, theta;           // Variables for Box-Muller method
     double   x;                     // Normal(0, 1) rv
     double   norm_rv;               // The adjusted normal rv
-    clock_t clock_start = clock();
 
     // Generate u
     u = 0.0;
@@ -111,8 +97,6 @@ static inline double norm(double mean, double std_dev) {
 
     // Adjust x value for specified mean and variance
     norm_rv = (x * std_dev) + mean;
-
-    timer_norm += (double) (clock() - clock_start) / CLOCKS_PER_SEC;
 
     // Return the normally distributed RV value
     return(norm_rv);
@@ -144,7 +128,7 @@ static inline void correct_drops(float* block, uint64_t nchans, uint64_t nsamps,
     //the original ts for later
     float ts_sorted[nsamps];
     memcpy(ts_sorted, ts, nsamps * sizeof(*ts));
-    qsort(ts_sorted, nsamps, sizeof(*ts), float_compare);
+    //qsort(ts_sorted, nsamps, sizeof(*ts), float_compare);
     
     //now get the median
     float median = quick_select_median(ts_sorted, nsamps);
@@ -161,7 +145,7 @@ static inline void correct_drops(float* block, uint64_t nchans, uint64_t nsamps,
     
     //now we have the processed array
     //now we actually calculate the mad
-    qsort(ts_processed, nsamps, sizeof(*ts_processed), float_compare);
+    //qsort(ts_processed, nsamps, sizeof(*ts_processed), float_compare);
     float mad = quick_select_median(ts_processed, nsamps);
 
     #ifdef DETAILED_TRACING
@@ -195,14 +179,14 @@ static inline void correct_drops(float* block, uint64_t nchans, uint64_t nsamps,
             channel[isamp] = *(block + ichan + (isamp * nchans));
 
         //get the median of the channel
-        qsort(channel, nsamps, sizeof(*channel), float_compare);
+        //qsort(channel, nsamps, sizeof(*channel), float_compare);
         bp_med[ichan] = quick_select_median(channel, nsamps);//getMedian(channel, nsamps);
         
         //now we calculate the mad of the channel
         for (isamp = 0; isamp < nsamps; isamp++)
             channel[isamp] = fabs(channel[isamp] - bp_med[ichan]);
 
-        qsort(channel, nsamps, sizeof(*channel), float_compare);
+        //qsort(channel, nsamps, sizeof(*channel), float_compare);
         bp_mad[ichan] = quick_select_median(channel, nsamps);//getMedian(channel, nsamps);
     }
 
@@ -214,7 +198,7 @@ static inline void correct_drops(float* block, uint64_t nchans, uint64_t nsamps,
     //iterate through the ts to find any indices where it is outside that interval
     for (isamp = 0; isamp < nsamps; isamp++) {
         //check for points
-        if (ts[isamp] < -thresh){// || ts[i] > thresh) {
+        if (ts[isamp] < -thresh || ts[isamp] > thresh) {
             //set mask to 1 here
             *(mask + isamp) = 1;
             //if the ts exceeds the threshold, start looping through the block at that index
@@ -278,7 +262,6 @@ int main() {
     int ibulk = 0;
     size_t nread = 0; // ### fread SET BUT NOT USED ###
     long nbytes = 0L;
-    clock_t clock_start;
 
     #ifdef DETAILED_TRACING
     int block_start_time, block_end_time;
@@ -290,7 +273,8 @@ int main() {
         #endif
         
         nsamps_to_read = MIN(nsamps, nsamps_total - ibulk*nsamps);
-        nread = fread(block, sizeof(*block), nchans*nsamps_to_read, ptr_in);
+        nread = fread(block, sizeof *block, nchans*nsamps_to_read, ptr_in);
+        nbytes += nread*sizeof *block;
 
         #ifdef DETAILED_TRACING
         printf("block: Block loaded, block[0]: %.1f.\n", block[0]);
@@ -299,9 +283,7 @@ int main() {
                 
         memset(mask, 0, nsamps * sizeof(*mask));
         
-        clock_start = clock();
         correct_drops(block, nchans, nsamps_to_read, thresh, mask);
-        timer_drops += (double) (clock() - clock_start) / CLOCKS_PER_SEC;
         
         #ifdef DETAILED_TRACING
         block_end_time = (unsigned) time(NULL);
@@ -320,7 +302,6 @@ int main() {
             break;
 
         ++ibulk;
-        nbytes += nread;
     }
     
     fclose(ptr_in);
@@ -333,16 +314,9 @@ int main() {
     int et = main_stop_time - main_start_time;
     float float_et = (float) et;
     
-    float pct_median = timer_median * 100.0 / float_et;
-    float pct_norm = timer_norm * 100.0 / float_et;
-    float pct_drops = (timer_drops - timer_median - timer_norm) * 100.0 / float_et;
-    
     printf("main: END, Total blocks = %d\n", ibulk);
     printf("main: END, Total elapsed time = %d seconds\n", et);
     printf("main: END, Blocks/second = %.2f\n", (float) ibulk / float_et);
     printf("main: END, MB/second = %.2f\n", ((float) nbytes / float_et) / 1e6);
-    printf("main: END, Pct time in quick_select_median() = %.2f %%\n", pct_median);
-    printf("main: END, Pct time in norm() = %.2f %%\n", pct_norm);
-    printf("main: END, Pct time in correct_drops() = %.2f %%\n", pct_drops);
 
 }
